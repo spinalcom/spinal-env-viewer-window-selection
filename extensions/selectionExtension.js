@@ -36,7 +36,15 @@ export default class SelectSet {
 
     this.boundingSphere = bbox.getBoundingSphere()
 
-    const leafIds = await Toolkit.getLeafNodes(model);
+    let leafIds = await Toolkit.getLeafNodes(model);
+
+    const hiddenElement = this.viewer.getHiddenNodes();
+
+
+    leafIds = leafIds.filter(el => {
+      return hiddenElement.indexOf(el) === -1;
+    })
+
 
     this.boundingBoxInfo = leafIds.map((dbId) => {
 

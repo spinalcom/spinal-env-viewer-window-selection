@@ -2,7 +2,6 @@ import extensionName from "./js/selection";
 let extension;
 
 document.addEventListener('keydown', function(event) {
-  console.log("event", event)
   extension = typeof extension === "undefined" ? window.spinal.ForgeViewer
     .viewer
     .getExtension(extensionName) : extension;

@@ -9,8 +9,7 @@ document.addEventListener('keydown', function(event) {
 
   if (event.altKey && event.ctrlKey) {
     extension.startSelection();
-  } else if (event.keyCode !== 17 || event
-    .keyCode !== 18)
+  }
 
 })
 

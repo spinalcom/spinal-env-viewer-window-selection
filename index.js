@@ -39,11 +39,8 @@ const windowSelection = SpinalWindowSelection({
     .viewer
     .getExtension(extensionName) : extension;
 
-  if (!visible) {
-    extension.startSelection();
-  } else {
-    extension.disableSelectionMode();
-  }
+  extension.startSelection();
+
   visible = !visible;
 
 });

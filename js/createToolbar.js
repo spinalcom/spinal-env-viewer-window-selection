@@ -1,7 +1,5 @@
 export default function(params, callback) {
 
-  console.log("pamramslksv", params)
-
   const ViewerToolbarButtonManager = class {
 
     constructor(viewer, options) {

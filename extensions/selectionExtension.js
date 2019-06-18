@@ -40,7 +40,7 @@ export default class SelectSet {
     let leafIds = this.viewer.getIsolatedNodes();
 
     if (leafIds && leafIds.length === 0) {
-      console.log("leafIds not isolate");
+
       leafIds = await Toolkit.getLeafNodes(model);
 
       const hiddenElement = this.viewer.getHiddenNodes();

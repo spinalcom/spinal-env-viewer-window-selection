@@ -37,20 +37,22 @@ export default class SelectSet {
     this.boundingSphere = bbox.getBoundingSphere()
 
 
-    let leafIds = this.viewer.getIsolatedNodes();
-
-    if (leafIds && leafIds.length === 0) {
-
-      leafIds = await Toolkit.getLeafNodes(model);
-
-      const hiddenElement = this.viewer.getHiddenNodes();
 
 
+    let leafIds = await Toolkit.getLeafNodes(model);
+
+
+
+    if (this.viewer.getIsolatedNodes().length > 0) {
+      let isolatedNodes = this.viewer.getIsolatedNodes();
+      leafIds = await Toolkit.getLeafNodes(model, isolatedNodes);
+    } else if (this.viewer.getHiddenNodes().length > 0) {
+      let hide = this.viewer.getHiddenNodes();
+      let hiddenNodes = await Toolkit.getLeafNodes(model, hide);
       leafIds = leafIds.filter(el => {
-        return hiddenElement.indexOf(el) === -1;
+        return hiddenNodes.indexOf(el) === -1;
       })
     }
-
 
     this.boundingBoxInfo = leafIds.map((dbId) => {
 

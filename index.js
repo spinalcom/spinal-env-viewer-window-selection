@@ -8,7 +8,6 @@ const TOOLBAR_GROUP_NAME = "spinalcom";
 const EXTENSION_NAME = "spinal-window-selection";
 
 let extension;
-let visible = false;
 
 // document.addEventListener('keydown', function(event) {
 //   extension = typeof extension === "undefined" ? window.spinal.ForgeViewer
@@ -39,9 +38,11 @@ const windowSelection = SpinalWindowSelection({
     .viewer
     .getExtension(extensionName) : extension;
 
-  extension.startSelection();
-
-  visible = !visible;
+  if (!extension.active) {
+    extension.startSelection();
+  } else {
+    extension.disableSelectionMode();
+  }
 
 });
 

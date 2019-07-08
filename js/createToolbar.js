@@ -52,7 +52,7 @@ export default function(params, callback) {
       );
 
       if (!this.subToolbar) {
-        console.log("params.subToolbarName", params.subToolbarName);
+        // console.log("params.subToolbarName", params.subToolbarName);
         this.subToolbar = new window.Autodesk.Viewing.UI.ControlGroup(
           params.subToolbarName
         );

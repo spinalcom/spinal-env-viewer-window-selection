@@ -302,7 +302,7 @@ export default class ViewerToolkit {
 
       } catch (ex) {
 
-        console.log(ex)
+        // console.log(ex)
         return reject(ex)
       }
     })

@@ -94,8 +94,13 @@ class SelectionComponent {
         this.selection = selection;
       })
 
-    this.viewer.toolController.registerTool(
-      this.selectionWindowTool)
+
+    this.viewer.addEventListener(window.Autodesk.Viewing.VIEWER_INITIALIZED,
+      () => {
+
+        this.viewer.toolController.registerTool(
+          this.selectionWindowTool)
+      })
 
   }
 

@@ -77,13 +77,15 @@ export default class SelectionWindowTool extends EventsEmitter {
   //
   //
   /////////////////////////////////////////////////////////
-  setModel(model) {
+  setModel() {
 
     if (this.isActive) {
+      let allModels = Object.values(window.spinal.ForgeViewer.viewerManager
+        .models);
 
-      this.model = model
+      this.model = allModels;
 
-      this.selectSet.setModel(model)
+      this.selectSet.setModel(allModels);
     }
   }
 
@@ -106,9 +108,8 @@ export default class SelectionWindowTool extends EventsEmitter {
 
       this.viewer.clearSelection()
 
-      this.model =
-        this.viewer.activeModel ||
-        this.viewer.model
+      this.model = Object.values(window.spinal.ForgeViewer.viewerManager
+        .models);
 
       this.selectSet.setModel(this.model)
 
@@ -200,13 +201,11 @@ export default class SelectionWindowTool extends EventsEmitter {
   //
   //
   /////////////////////////////////////////////////////////
-  handleGesture(event) {
-
+  handleGesture() {
     return true
   }
 
-  handleSingleClick(event, button) {
-
+  handleSingleClick() {
     return true
   }
 
@@ -464,16 +463,23 @@ export default class SelectionWindowTool extends EventsEmitter {
       return false
     }
 
-    const dbIds = this.selectSet.compute(
+    const dbIdsByModel = this.selectSet.compute(
       this.pointerStart,
       this.pointerEnd,
       this.partialSelect)
 
-    this.emit('selection', {
-      model: this.model,
-      guid: this.guid(),
-      dbIds
+    dbIdsByModel.forEach(el => {
+      for (const iterator of el) {
+        this.emit('selection', {
+          model: iterator.model,
+          guid: this.guid(),
+          dbIds: iterator.dbIds
+        })
+      }
+
     })
+
+
 
     this.deactivate()
 

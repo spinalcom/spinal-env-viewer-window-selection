@@ -17,52 +17,122 @@ export default class SelectSet {
     this.viewer = viewer;
   }
 
+
+  ///////////////////////////////////////////////////////////
+  //Filter an Object
+  //
+  ///////////////////////////////////////////////////////////
+
+  filterLeafIds(leafIds, hiddenIds) {
+
+    return leafIds.map(leaft => {
+
+      let modelFoundInHidden = hiddenIds.find(el => el.model.id === leaft
+        .model.id);
+
+      if (modelFoundInHidden) {
+        leaft.ids = leaft.ids.filter(el => {
+          return modelFoundInHidden.ids.indexOf(el) === -1;
+        })
+      }
+
+      return leaft;
+
+    })
+
+  }
+
+
+
   /////////////////////////////////////////////////////////
   // Set model: required to compute the bounding boxes
   //
   /////////////////////////////////////////////////////////
-  async setModel(model) {
+  async setModel(models) {
 
-    this.model = model
+    this.model = models
 
-    const instanceTree = model.getData().instanceTree
+    const instanceTree = models.map(model => {
+      return {
+        model: model,
+        instanceTree: model.getData().instanceTree
+      }
+    });
 
-    const rootId = instanceTree.getRootId()
+    const rootIds = instanceTree.map(el => {
+      return {
+        model: el.model,
+        rootId: el.instanceTree.getRootId()
+      }
+    })
 
-    const bbox =
-      await this.getComponentBoundingBox(
-        model, rootId);
-
-
-    this.boundingSphere = bbox.getBoundingSphere()
-
-
-
-
-    let leafIds = await Toolkit.getLeafNodes(model);
+    const bboxRes = await Promise.all(rootIds.map(async obj => {
+      return {
+        model: obj.model,
+        bbox: await this.getComponentBoundingBox(obj.model, obj
+          .rootId)
+      }
+    }))
 
 
 
-    if (this.viewer.getIsolatedNodes().length > 0) {
-      let isolatedNodes = this.viewer.getIsolatedNodes();
-      leafIds = await Toolkit.getLeafNodes(model, isolatedNodes);
-    } else if (this.viewer.getHiddenNodes().length > 0) {
-      let hide = this.viewer.getHiddenNodes();
-      let hiddenNodes = await Toolkit.getLeafNodes(model, hide);
-      leafIds = leafIds.filter(el => {
-        return hiddenNodes.indexOf(el) === -1;
-      })
+    this.boundingSphere = bboxRes.map(el => {
+      return {
+        model: el.model,
+        boundingSphere: el.bbox.getBoundingSphere()
+      }
+    })
+
+
+
+
+    // let leafIds = await Toolkit.getLeafNodes(model);
+
+    let leafIds = await Promise.all(models.map(async model => {
+      return {
+        model: model,
+        ids: await Toolkit.getLeafNodes(model)
+      }
+    }))
+
+    let isolatedNodes = this.viewer.getAggregateIsolation();
+    let hiddenNodes = this.viewer.getAggregateHiddenNodes();
+
+    if (isolatedNodes.length > 0) {
+
+      leafIds = await Promise.all(isolatedNodes.map(async el => {
+        return {
+          model: el.model,
+          ids: await Toolkit.getLeafNodes(el.model, el.ids)
+        }
+      }));
+
+    } else if (hiddenNodes.length > 0) {
+      let allNodesHidden = await Promise.all(hiddenNodes.map(async hidden => {
+        return {
+          model: hidden.model,
+          ids: await Toolkit.getLeafNodes(hidden.model, hidden.ids)
+        }
+      }));
+
+      leafIds = this.filterLeafIds(leafIds, allNodesHidden);
     }
 
-    this.boundingBoxInfo = leafIds.map((dbId) => {
 
-      const bbox = this.getLeafComponentBoundingBox(
-        model, dbId)
+    this.boundingBoxInfo = leafIds.map((el) => {
 
-      return {
-        bbox,
-        dbId
-      }
+      el.ids = el.ids.map(dbId => {
+        const bbox = this.getLeafComponentBoundingBox(
+          el.model, dbId)
+
+        return {
+          bbox,
+          dbId
+        }
+      })
+
+      return el;
+
     })
   }
 
@@ -278,39 +348,44 @@ export default class SelectSet {
     const outside = []
     const inside = []
 
-    for (let bboxInfo of this.boundingBoxInfo) {
+    return this.boundingBoxInfo.map(res => {
+      for (let bboxInfo of res.ids) {
 
-      // if bounding box inside, then we can be sure
-      // the mesh is inside too
+        // if bounding box inside, then we can be sure
+        // the mesh is inside too
 
-      if (this.containsBox(planes, bboxInfo.bbox)) {
+        if (this.containsBox(planes, bboxInfo.bbox)) {
 
-        inside.push(bboxInfo)
+          inside.push(bboxInfo)
 
-      } else if (partialSelect) {
+        } else if (partialSelect) {
 
-        // otherwise need a more precise tri-box
-        // analysis to determine if the bbox intersect
-        // the pyramid geometry
+          // otherwise need a more precise tri-box
+          // analysis to determine if the bbox intersect
+          // the pyramid geometry
 
-        const intersects = geometryIntersectsBox3(
-          geometry, bboxInfo.bbox)
+          const intersects = geometryIntersectsBox3(
+            geometry, bboxInfo.bbox)
 
-        intersects.length ?
-          intersect.push(bboxInfo) :
+          intersects.length ?
+            intersect.push(bboxInfo) :
+            outside.push(bboxInfo)
+
+        } else {
+
           outside.push(bboxInfo)
-
-      } else {
-
-        outside.push(bboxInfo)
+        }
       }
-    }
 
-    return {
-      intersect,
-      outside,
-      inside
-    }
+      return {
+        model: res.model,
+        intersect,
+        outside,
+        inside
+      }
+    })
+
+
   }
 
   /////////////////////////////////////////////////////////
@@ -319,6 +394,7 @@ export default class SelectSet {
   // corners and determines enclosed meshes from the model
   //
   /////////////////////////////////////////////////////////
+
   compute(pointer1, pointer2, partialSelect) {
 
     // build 4 rays to project the 4 corners
@@ -362,120 +438,136 @@ export default class SelectSet {
 
     // we use the bounding sphere to determine
     // the height of the pyramid
-    const {
-      center,
-      radius
-    } = this.boundingSphere
 
-    // compute distance from pyramid top to center
-    // of bounding sphere
+    return this.boundingSphere.map(res => {
 
-    const dist = new window.THREE.Vector3(
-      top.x - center.x,
-      top.y - center.y,
-      top.z - center.z)
 
-    // compute height of the pyramid:
-    // to make sure we go far enough,
-    // we add the radius of the bounding sphere
 
-    const height = radius + dist.length()
+      const {
+        center,
+        radius
+      } = res.boundingSphere
 
-    // compute the length of the side edges
+      // compute distance from pyramid top to center
+      // of bounding sphere
 
-    const angle = ray1.direction.angleTo(
-      ray2.direction)
+      const dist = new window.THREE.Vector3(
+        top.x - center.x,
+        top.y - center.y,
+        top.z - center.z)
 
-    const length = height / Math.cos(angle * 0.5)
+      // compute height of the pyramid:
+      // to make sure we go far enough,
+      // we add the radius of the bounding sphere
 
-    // compute bottom vertices
+      const height = radius + dist.length()
 
-    const v1 = new window.THREE.Vector3(
-      ray1.origin.x + ray1.direction.x * length,
-      ray1.origin.y + ray1.direction.y * length,
-      ray1.origin.z + ray1.direction.z * length)
+      // compute the length of the side edges
 
-    const v2 = new window.THREE.Vector3(
-      ray2.origin.x + ray2.direction.x * length,
-      ray2.origin.y + ray2.direction.y * length,
-      ray2.origin.z + ray2.direction.z * length)
+      const angle = ray1.direction.angleTo(
+        ray2.direction)
 
-    const v3 = new window.THREE.Vector3(
-      ray3.origin.x + ray3.direction.x * length,
-      ray3.origin.y + ray3.direction.y * length,
-      ray3.origin.z + ray3.direction.z * length)
+      const length = height / Math.cos(angle * 0.5)
 
-    const v4 = new window.THREE.Vector3(
-      ray4.origin.x + ray4.direction.x * length,
-      ray4.origin.y + ray4.direction.y * length,
-      ray4.origin.z + ray4.direction.z * length)
+      // compute bottom vertices
 
-    // create planes
+      const v1 = new window.THREE.Vector3(
+        ray1.origin.x + ray1.direction.x * length,
+        ray1.origin.y + ray1.direction.y * length,
+        ray1.origin.z + ray1.direction.z * length)
 
-    const plane1 = new window.THREE.Plane()
-    const plane2 = new window.THREE.Plane()
-    const plane3 = new window.THREE.Plane()
-    const plane4 = new window.THREE.Plane()
-    const plane5 = new window.THREE.Plane()
+      const v2 = new window.THREE.Vector3(
+        ray2.origin.x + ray2.direction.x * length,
+        ray2.origin.y + ray2.direction.y * length,
+        ray2.origin.z + ray2.direction.z * length)
 
-    plane1.setFromCoplanarPoints(top, v1, v2)
-    plane2.setFromCoplanarPoints(top, v2, v3)
-    plane3.setFromCoplanarPoints(top, v3, v4)
-    plane4.setFromCoplanarPoints(top, v4, v1)
-    plane5.setFromCoplanarPoints(v3, v2, v1)
+      const v3 = new window.THREE.Vector3(
+        ray3.origin.x + ray3.direction.x * length,
+        ray3.origin.y + ray3.direction.y * length,
+        ray3.origin.z + ray3.direction.z * length)
 
-    const planes = [
-      plane1, plane2,
-      plane3, plane4,
-      plane5
-    ]
+      const v4 = new window.THREE.Vector3(
+        ray4.origin.x + ray4.direction.x * length,
+        ray4.origin.y + ray4.direction.y * length,
+        ray4.origin.z + ray4.direction.z * length)
 
-    const vertices = [
-      v1, v2, v3, v4, top
-    ]
+      // create planes
 
-    // filter all bounding boxes to determine
-    // if inside, outside or intersect
+      const plane1 = new window.THREE.Plane()
+      const plane2 = new window.THREE.Plane()
+      const plane3 = new window.THREE.Plane()
+      const plane4 = new window.THREE.Plane()
+      const plane5 = new window.THREE.Plane()
 
-    const result = this.filterBoundingBoxes(
-      planes, vertices, partialSelect)
+      plane1.setFromCoplanarPoints(top, v1, v2)
+      plane2.setFromCoplanarPoints(top, v2, v3)
+      plane3.setFromCoplanarPoints(top, v3, v4)
+      plane4.setFromCoplanarPoints(top, v4, v1)
+      plane5.setFromCoplanarPoints(v3, v2, v1)
 
-    // all inside bboxes need to be part of the selection
+      const planes = [
+        plane1, plane2,
+        plane3, plane4,
+        plane5
+      ]
 
-    const dbIdsInside = result.inside.map((bboxInfo) => {
+      const vertices = [
+        v1, v2, v3, v4, top
+      ]
 
-      return bboxInfo.dbId
-    })
+      // filter all bounding boxes to determine
+      // if inside, outside or intersect
 
-    // if partialSelect = true
-    // we need to return the intersect bboxes
+      const result = this.filterBoundingBoxes(
+        planes, vertices, partialSelect)
 
-    if (partialSelect) {
 
-      const dbIdsIntersect = result.intersect.map((bboxInfo) => {
+      return result.map(res => {
+        let obj = {
+          model: res.model,
+          dbIds: []
+        }
 
-        return bboxInfo.dbId
+        const dbIdsInside = res.inside.map((bboxInfo) => {
+          return bboxInfo.dbId
+        })
+
+        // if partialSelect = true
+        // we need to return the intersect bboxes
+
+        if (partialSelect) {
+
+          const dbIdsIntersect = res.intersect.map((bboxInfo) => {
+            return bboxInfo.dbId
+          })
+
+          // At this point perform a finer analysis
+          // to determine if the any of the mesh vertices are inside
+          // or outside the selection window but it would
+          // be a much more expensive computation
+
+          //const dbIdsIntersectAccurate =
+          //  dbIdsIntersect.filter((dbId) => {
+          //
+          //    const geometry =
+          //      Toolkit.buildComponentGeometry(
+          //        this.viewer, this.viewer.model, dbId)
+          //
+          //    return this.containsVertex(
+          //      planes, geometry.vertices)
+          //  })
+
+          let ids = [...dbIdsInside, ...dbIdsIntersect];
+
+          obj.dbIds = ids;
+          return obj;
+        }
+
+        obj.dbIds = dbIdsInside;
+        return obj;
+
       })
 
-      // At this point perform a finer analysis
-      // to determine if the any of the mesh vertices are inside
-      // or outside the selection window but it would
-      // be a much more expensive computation
-
-      //const dbIdsIntersectAccurate =
-      //  dbIdsIntersect.filter((dbId) => {
-      //
-      //    const geometry =
-      //      Toolkit.buildComponentGeometry(
-      //        this.viewer, this.viewer.model, dbId)
-      //
-      //    return this.containsVertex(
-      //      planes, geometry.vertices)
-      //  })
-
-      return [...dbIdsInside, ...dbIdsIntersect]
-    }
-
-    return dbIdsInside
+    })
   }
 }
